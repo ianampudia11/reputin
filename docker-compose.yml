@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16
+    container_name: powerchat-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: powerchat
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/001-initial-schema.sql:/docker-entrypoint-initdb.d/01-initial-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # BotHive Application (Backend + Frontend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: powerchat-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:root@postgres:5432/powerchat
+      - PGSSLMODE=disable
+      - SESSION_SECRET=powerchat-docker-secret
+      - FORCE_INSECURE_COOKIE=true
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=12345678
+      - XAI_API_KEY=${XAI_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - BASE_URL=${BASE_URL:-http://localhost:5000}
+      - DOCKER_CONTAINER=true
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./whatsapp-sessions:/app/whatsapp-sessions
+      # Auto-update volumes
+      - powerchat_updates:/app/volumes/updates
+      - powerchat_backups:/app/volumes/backups
+      - powerchat_app_updates:/app/volumes/app-updates
+      - powerchat_restart_signals:/app/volumes
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  # Auto-update persistent volumes
+  powerchat_updates:
+  powerchat_backups:
+  powerchat_app_updates:
+  powerchat_restart_signals:

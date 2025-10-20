@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+dist
+.git
+.github
+.vscode
+*.md
+.env
+uploads/*
+!uploads/.gitkeep
+whatsapp-sessions/*
+!whatsapp-sessions/.gitkeep

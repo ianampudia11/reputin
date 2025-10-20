@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16
+    container_name: ${INSTANCE_NAME}-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - ${INSTANCE_NAME}_postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - ${INSTANCE_NAME}_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # BotHive Application (Backend + Frontend)
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        - APP_PORT=${APP_PORT}
+        - ADMIN_EMAIL=${ADMIN_EMAIL}
+        - COMPANY_NAME=${COMPANY_NAME}
+        - INSTANCE_NAME=${INSTANCE_NAME}
+    container_name: ${INSTANCE_NAME}-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Core Application Settings
+      - NODE_ENV=${NODE_ENV:-production}
+      - APP_PORT=${APP_PORT}
+      - INSTANCE_NAME=${INSTANCE_NAME}
+
+      # Database Configuration
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-root}@postgres:5432/${DB_NAME}
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=${DB_USER:-postgres}
+      - PGPASSWORD=${DB_PASSWORD:-root}
+      - PGDATABASE=${DB_NAME}
+      - PGSSLMODE=disable
+
+      # Security Settings
+      - SESSION_SECRET=${SESSION_SECRET}
+      - FORCE_INSECURE_COOKIE=${FORCE_INSECURE_COOKIE:-true}
+
+      # Admin Configuration
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+
+      # Company/Instance Specific
+      - COMPANY_NAME=${COMPANY_NAME}
+      - COMPANY_SLUG=${COMPANY_SLUG}
+      - PRIMARY_COLOR=${PRIMARY_COLOR:-#333235}
+
+      # API Keys and External Services
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+
+      # Google OAuth Configuration
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - BASE_URL=${BASE_URL}
+
+      # Payment Configuration
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET}
+      - MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN}
+
+      # Email Configuration
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+
+      # WhatsApp Configuration
+      - WHATSAPP_WEBHOOK_VERIFY_TOKEN=${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
+
+      # Storage Configuration
+      - STORAGE_PRIMARY_PROVIDER=${STORAGE_PRIMARY_PROVIDER:-local}
+      - GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}
+      - GOOGLE_CLOUD_STORAGE_BUCKET=${GOOGLE_CLOUD_STORAGE_BUCKET}
+
+      # Feature Flags
+      - ENABLE_BACKUP_SCHEDULER=${ENABLE_BACKUP_SCHEDULER:-true}
+      - ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-true}
+      - ENABLE_FLOW_BUILDER=${ENABLE_FLOW_BUILDER:-true}
+
+    ports:
+      - "${APP_PORT}:5000"
+    volumes:
+      # Instance-specific data directories
+      - ${INSTANCE_NAME}_uploads:/app/data/uploads
+      - ${INSTANCE_NAME}_whatsapp_sessions:/app/data/whatsapp-sessions
+      - ${INSTANCE_NAME}_backups:/app/data/backups
+
+      # Configuration files (optional)
+      - ./config:/app/config:ro
+
+      # Instance-specific migrations
+      - ./migrations:/app/migrations:ro
+
+      # Logs
+      - ${INSTANCE_NAME}_logs:/app/logs
+    networks:
+      - ${INSTANCE_NAME}_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT}/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  ${INSTANCE_NAME}_network:
+    driver: bridge
+    name: ${INSTANCE_NAME}_network
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.10.${INSTANCE_ID}.0/24
+          gateway: 10.10.${INSTANCE_ID}.1
+
+volumes:
+  ${INSTANCE_NAME}_postgres_data:
+    name: ${INSTANCE_NAME}_postgres_data
+  ${INSTANCE_NAME}_uploads:
+    name: ${INSTANCE_NAME}_uploads
+  ${INSTANCE_NAME}_whatsapp_sessions:
+    name: ${INSTANCE_NAME}_whatsapp_sessions
+  ${INSTANCE_NAME}_backups:
+    name: ${INSTANCE_NAME}_backups
+  ${INSTANCE_NAME}_logs:
+    name: ${INSTANCE_NAME}_logs
+

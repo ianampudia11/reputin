@@ -1,0 +1,6 @@
+name,phone,email,company,tags,notes
+John Doe,+1234567890,john@example.com,Acme Corp,"vip,customer",Important client
+Jane Smith,+0987654321,jane@example.com,Tech Inc,"lead,prospect",New lead from website
+Bob Johnson,+1122334455,bob@example.com,StartupXYZ,"customer",Regular customer
+Alice Brown,+5566778899,alice@example.com,Global Ltd,"vip,premium",Premium customer
+Charlie Wilson,+9988776655,charlie@example.com,Local Business,"lead",Potential lead
